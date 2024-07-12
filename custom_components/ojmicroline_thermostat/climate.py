@@ -93,7 +93,10 @@ class OJMicrolineThermostat(
 
     _attr_hvac_modes: ClassVar[list[HVACMode]] = MODE_LIST
     _attr_supported_features = (
-        ClimateEntityFeature.PRESET_MODE | ClimateEntityFeature.TARGET_TEMPERATURE
+        ClimateEntityFeature.PRESET_MODE
+            | ClimateEntityFeature.TARGET_TEMPERATURE
+            | ClimateEntityFeature.TURN_OFF
+            | ClimateEntityFeature.TURN_ON
     )
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_has_entity_name = True
