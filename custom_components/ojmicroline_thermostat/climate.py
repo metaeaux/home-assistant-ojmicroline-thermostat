@@ -15,6 +15,7 @@ from homeassistant.components.climate.const import (
     PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
+    PRESET_NONE,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -48,10 +49,11 @@ from .coordinator import OJMicrolineDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+MODE_LIST = [HVACMode.HEAT, HVACMode.AUTO, HVACMode.OFF]
 VENDOR_TO_HA_STATE = {
     REGULATION_SCHEDULE: PRESET_SCHEDULE,
     REGULATION_COMFORT: PRESET_COMFORT,
-    REGULATION_MANUAL: PRESET_MANUAL,
+    REGULATION_MANUAL: PRESET_NONE,
     REGULATION_VACATION: PRESET_VACATION,
     REGULATION_FROST_PROTECTION: PRESET_FROST_PROTECTION,
     REGULATION_BOOST: PRESET_BOOST,
@@ -88,8 +90,7 @@ class OJMicrolineThermostat(
 ):
     """OJMicrolineThermostat climate."""
 
-    _attr_hvac_modes: ClassVar[list[HVACMode]] = [HVACMode.HEAT]
-    _attr_hvac_mode = HVACMode.HEAT
+    _attr_hvac_modes: ClassVar[list[HVACMode]] = MODE_LIST
     _attr_supported_features = (
         ClimateEntityFeature.PRESET_MODE | ClimateEntityFeature.TARGET_TEMPERATURE
     )
@@ -209,20 +210,25 @@ class OJMicrolineThermostat(
         return self.coordinator.data[self.idx].min_temperature / 100
 
     @property
-    def hvac_action(self) -> HVACAction | None:
-        """Indicates whether the thermostat is currently heating.
+    def hvac_mode(self) -> HVACMode | None:
+        """
+        Return the hvac operation ie. heat, cool mode.
 
-        Returns
-        -------
-            The HVACAction.
+        Returns:
+            The HVACMode.
 
         """
-        thermostat = self.coordinator.data[self.idx]
-        if thermostat.heating:
-            return HVACAction.HEATING
-        if thermostat.online:
-            return HVACAction.IDLE
-        return HVACAction.OFF
+        if self.coordinator.data[self.idx].heating:
+            return HVACMode.HEAT
+        if self.preset_mode == PRESET_NONE:
+            return HVACMode.AUTO
+
+        return HVACMode.OFF
+
+    @property
+    def hvac_modes(self):
+        """Return the list of available operation modes."""
+        return MODE_LIST
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode.
@@ -284,17 +290,30 @@ class OJMicrolineThermostat(
         await asyncio.sleep(2)
         await self.coordinator.async_request_refresh()
 
-    async def async_set_hvac_mode(
-        self,
-        hvac_mode: str,  # pylint: disable=unused-argument  # noqa: ARG002
-    ) -> bool:
-        """Set new hvac mode.
+    async def async_set_hvac_mode(self, hvac_mode) -> None:
+        """
+        Set new hvac mode.
 
-        Always ignore; we only support HEATING mode.
+        Always set to schedule as we cannot control the heating.
 
         Args:
-        ----
             hvac_mode: Currently not used.
-
         """
-        return True
+        if hvac_mode == HVACMode.OFF:
+            await self.async_set_preset_mode(PRESET_HOME)
+        else:
+            await self.coordinator.api.set_regulation_mode(
+                resource=self.coordinator.data[self.unique_id],
+                regulation_mode=REGULATION_MANUAL,
+                temperature=int(25 * 100),
+                duration=self.options.get(CONF_COMFORT_MODE_DURATION),
+            )
+            await self.async_set_preset_mode(PRESET_NONE)
+        await self._async_delayed_request_refresh()
+
+    async def async_turn_on(self):
+        await self.async_set_hvac_mode(HVACMode.AUTO)
+
+    async def async_turn_off(self):
+        await self.async_set_hvac_mode(HVACMode.OFF)
+
