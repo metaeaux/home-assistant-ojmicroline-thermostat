@@ -15,6 +15,7 @@ from homeassistant.components.climate.const import (
     PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
+    PRESET_HOME,
     PRESET_NONE,
 )
 from homeassistant.config_entries import ConfigEntry
