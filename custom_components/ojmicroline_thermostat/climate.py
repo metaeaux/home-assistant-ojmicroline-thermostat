@@ -314,7 +314,9 @@ class OJMicrolineThermostat(
 
     async def async_turn_on(self):
         await self.async_set_hvac_mode(HVACMode.AUTO)
+        await self._async_delayed_request_refresh()
 
     async def async_turn_off(self):
         await self.async_set_hvac_mode(HVACMode.OFF)
+        await self._async_delayed_request_refresh()
 
